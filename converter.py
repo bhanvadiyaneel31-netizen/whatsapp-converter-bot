@@ -76,7 +76,7 @@ def docx_to_pdf(docx_path: str) -> str:
     # --outdir = where to save the output
     result = subprocess.run(
         [
-            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+            "libreoffice",
             "--headless",
             "--convert-to", "pdf",
             "--outdir", "output",
