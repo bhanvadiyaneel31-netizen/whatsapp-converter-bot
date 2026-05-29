@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: whatsapp-converter-bot
+    runtime: python
+    buildCommand: apt-get update && apt-get install -y libreoffice && pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+      - key: BASE_URL
+        sync: false
