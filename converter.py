@@ -51,32 +51,38 @@ def pdf_to_docx(pdf_path: str) -> str:
 
 def docx_to_pdf(docx_path: str) -> str:
     os.makedirs("output", exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(docx_path))[0]
+    output_path = os.path.join("output", f"{base_name}.pdf")
+
     print(f"🔄 Converting DOCX → PDF: {docx_path}")
 
+    # Try docx2pdf first (works on Render/Linux without LibreOffice)
+    try:
+        from docx2pdf import convert
+        convert(docx_path, output_path)
+        if os.path.exists(output_path):
+            print(f"✅ DOCX → PDF done via docx2pdf: {output_path}")
+            _cleanup(docx_path)
+            return output_path
+    except Exception as e:
+        print(f"⚠️ docx2pdf failed: {e}, trying LibreOffice...")
+
+    # Fallback: LibreOffice (works on Mac/local)
     libreoffice = get_libreoffice_path()
     if not libreoffice:
-        raise RuntimeError(
-            "LibreOffice not found. Install it:\n"
-            "  Linux: apt-get install libreoffice\n"
-            "  Mac: brew install --cask libreoffice"
-        )
+        raise RuntimeError("No PDF converter found. Install LibreOffice or docx2pdf.")
 
-    print(f"   Using LibreOffice: {libreoffice}")
     result = subprocess.run(
         [libreoffice, "--headless", "--convert-to", "pdf", "--outdir", "output", docx_path],
         capture_output=True, text=True, timeout=60
     )
-
     if result.returncode != 0:
         raise RuntimeError(f"LibreOffice failed:\n{result.stderr}")
-
-    base_name = os.path.splitext(os.path.basename(docx_path))[0]
-    output_path = os.path.join("output", f"{base_name}.pdf")
 
     if not os.path.exists(output_path):
         raise FileNotFoundError(f"Output not found: {output_path}")
 
-    print(f"✅ DOCX → PDF done: {output_path}")
+    print(f"✅ DOCX → PDF done via LibreOffice: {output_path}")
     _cleanup(docx_path)
     return output_path
 
