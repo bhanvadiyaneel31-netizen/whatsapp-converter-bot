@@ -3,7 +3,8 @@ converter.py
 ============
 Handles both conversion directions:
   PDF  → DOCX  using pdf2docx
-  DOCX → PDF   using LibreOffice (headless)
+  DOCX → PDF   using LibreOffice (headless) — primary
+               docx2pdf — fallback (macOS/Windows only)
 """
 
 import os
@@ -15,7 +16,7 @@ from pdf2docx import Converter as PDFConverter
 
 def get_libreoffice_path():
     """Find LibreOffice binary across different OS."""
-    # Try system PATH first (Linux/Render)
+    # Linux/Render (after apt-get install -y libreoffice)
     path = shutil.which("libreoffice") or shutil.which("soffice")
     if path:
         return path
@@ -56,7 +57,27 @@ def docx_to_pdf(docx_path: str) -> str:
 
     print(f"🔄 Converting DOCX → PDF: {docx_path}")
 
-    # Try docx2pdf first (works on Render/Linux without LibreOffice)
+    # PRIMARY: LibreOffice headless (works on Linux/Render and Mac)
+    libreoffice = get_libreoffice_path()
+    if libreoffice:
+        try:
+            result = subprocess.run(
+                [libreoffice, "--headless", "--convert-to", "pdf",
+                 "--outdir", "output", docx_path],
+                capture_output=True, text=True, timeout=60
+            )
+            if result.returncode == 0 and os.path.exists(output_path):
+                print(f"✅ DOCX → PDF done via LibreOffice: {output_path}")
+                _cleanup(docx_path)
+                return output_path
+            else:
+                print(f"⚠️ LibreOffice failed (rc={result.returncode}): {result.stderr}")
+        except Exception as e:
+            print(f"⚠️ LibreOffice exception: {e}, trying docx2pdf...")
+    else:
+        print("⚠️ LibreOffice not found, trying docx2pdf...")
+
+    # FALLBACK: docx2pdf (macOS/Windows only — requires Microsoft Word)
     try:
         from docx2pdf import convert
         convert(docx_path, output_path)
@@ -64,27 +85,15 @@ def docx_to_pdf(docx_path: str) -> str:
             print(f"✅ DOCX → PDF done via docx2pdf: {output_path}")
             _cleanup(docx_path)
             return output_path
+        else:
+            raise RuntimeError("docx2pdf ran but output file not found.")
     except Exception as e:
-        print(f"⚠️ docx2pdf failed: {e}, trying LibreOffice...")
-
-    # Fallback: LibreOffice (works on Mac/local)
-    libreoffice = get_libreoffice_path()
-    if not libreoffice:
-        raise RuntimeError("No PDF converter found. Install LibreOffice or docx2pdf.")
-
-    result = subprocess.run(
-        [libreoffice, "--headless", "--convert-to", "pdf", "--outdir", "output", docx_path],
-        capture_output=True, text=True, timeout=60
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"LibreOffice failed:\n{result.stderr}")
-
-    if not os.path.exists(output_path):
-        raise FileNotFoundError(f"Output not found: {output_path}")
-
-    print(f"✅ DOCX → PDF done via LibreOffice: {output_path}")
-    _cleanup(docx_path)
-    return output_path
+        raise RuntimeError(
+            f"All converters failed.\n"
+            f"LibreOffice: not found or failed.\n"
+            f"docx2pdf: {e}\n"
+            f"On Render: ensure build command includes: apt-get install -y libreoffice"
+        )
 
 
 def _cleanup(file_path: str):
